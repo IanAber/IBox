@@ -11,6 +11,8 @@
   header { display:flex; align-items:center; gap:24px; padding:10px 16px; background:var(--primary); color:#fff; }
   header h1 { font-size:1.15rem; margin:0; font-weight:600; }
   header nav a { color:#fff; text-decoration:none; padding:6px 10px; border-radius:4px; opacity:.85; }
+  /* active is added by JS to the current page's nav link */
+  /*noinspection CssUnusedSymbol*/
   header nav a.active { background:rgba(255,255,255,.2); opacity:1; }
   header .conn { margin-left:auto; font-size:.8rem; opacity:.9; }
   main { padding:12px; }
@@ -31,10 +33,16 @@
   .row { display:grid; grid-template-columns:minmax(200px,1fr) 130px 130px 80px; column-gap:32px; align-items:center; padding:7px 0; }
   .row.header { font-weight:600; border-bottom:1px solid rgba(128,128,128,.4); margin-bottom:4px; }
   .name-on input { color:var(--error); font-weight:600; }
+  /* status-cell and badge on/off/pending classes are set from JS when rows are built */
+  /*noinspection CssUnusedSymbol*/
   .status-cell { display:flex; justify-content:center; }
+  /*noinspection CssUnusedSymbol*/
   .badge { padding:3px 10px; border-radius:12px; font-size:.8rem; font-weight:700; letter-spacing:.03em; }
+  /*noinspection CssUnusedSymbol*/
   .badge.on { background:rgba(211,47,47,.15); color:var(--error); }
+  /*noinspection CssUnusedSymbol*/
   .badge.off { background:rgba(128,128,128,.15); color:rgba(90,90,90,.9); }
+  /*noinspection CssUnusedSymbol*/
   .badge.pending { outline:2px dashed currentColor; outline-offset:1px; }
   .buttons { display:flex; justify-content:flex-end; gap:12px; margin-top:20px; }
   .msg-error { margin-top:14px; color:var(--error); font-weight:500; }
@@ -274,18 +282,19 @@
   function fillFrom(d) {
     FIELDS.forEach(([key, , , prop]) => { if (d[prop] !== undefined && d[prop] !== null) { vals[key] = d[prop]; inputs[key].value = d[prop]; } });
   }
+  const swRead = $('sw-read'), swActions = $('sw-actions'), swHwsim = $('sw-hwsim'), boxAlert = $('box-alert');
   function renderSim() {
-    $('sw-read').checked = sim.readEnabled;
-    $('sw-actions').checked = sim.relayActionsEnabled;
-    $('sw-hwsim').checked = sim.relayHwSimulated;
+    swRead.checked = sim.readEnabled;
+    swActions.checked = sim.relayActionsEnabled;
+    swHwsim.checked = sim.relayHwSimulated;
     const ro = sim.readEnabled;
     Object.values(inputs).forEach(i => i.disabled = ro);
     document.querySelectorAll('#presets button, #btn-send').forEach(b => b.disabled = ro);
     $('sw-auto').disabled = ro;
     $('box-hwsim').classList.toggle('hidden', !sim.relayHwSimulated);
     const alertOn = !ro && sim.relayActionsEnabled;
-    $('box-alert').classList.toggle('hidden', !alertOn);
-    $('box-alert').textContent = `⚠ Relay Actions are ENABLED while in test mode — simulated values WILL drive ${sim.relayHwSimulated ? 'the simulated relay model' : 'real relays'}.`;
+    boxAlert.classList.toggle('hidden', !alertOn);
+    boxAlert.textContent = `⚠ Relay Actions are ENABLED while in test mode — simulated values WILL drive ${sim.relayHwSimulated ? 'the simulated relay model' : 'real relays'}.`;
     $('box-muted').classList.toggle('hidden', ro || sim.relayActionsEnabled);
     $('payload-title').textContent = ro ? 'Current live payload (read-only, mirrors eg4_data)' : 'Current simulated payload';
     $('payload').textContent = JSON.stringify(ro ? sim.data : makeData(), null, 2);
@@ -301,15 +310,15 @@
     if (sim.readEnabled) return;
     try { await post('/api/sim/data', makeData()); } catch (e) { alert(e.message); }
   }
-  const toggle = (url, id) => async () => {
-    const want = $(id).checked;
+  const toggle = (url, el) => async () => {
+    const want = el.checked;
     try { Object.assign(sim, await post(url, { enabled: want })); }
     catch (e) { alert(e.message); }
     renderSim();
   };
-  $('sw-read').onchange = toggle('/api/sim/read-enable', 'sw-read');
-  $('sw-actions').onchange = toggle('/api/sim/relay-actions', 'sw-actions');
-  $('sw-hwsim').onchange = toggle('/api/sim/relay-hw-simulated', 'sw-hwsim');
+  swRead.onchange = toggle('/api/sim/read-enable', swRead);
+  swActions.onchange = toggle('/api/sim/relay-actions', swActions);
+  swHwsim.onchange = toggle('/api/sim/relay-hw-simulated', swHwsim);
   $('btn-send').onclick = sendData;
 
   // ---------------- Live updates (SSE) ----------------

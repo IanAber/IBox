@@ -42,7 +42,9 @@ func TestApplyBlock1(t *testing.T) {
 
 	regs2 := make([]uint16, 10)
 	regs2[4], regs2[5] = 800, 900
-	applyBlock2(&d, regs2)
+	if err := applyBlock2(&d, regs2); err != nil {
+		t.Fatal(err)
+	}
 	check("l1", d.EPSL1PowerW, 800)
 	check("l2", d.EPSL2PowerW, 900)
 }

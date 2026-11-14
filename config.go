@@ -69,12 +69,17 @@ func toNumber(v any) float64 {
 func isFinite(f float64) bool { return !math.IsNaN(f) && !math.IsInf(f, 0) }
 
 // validateConfig = validate() in "Validate + store circuitConfig".
+// Its error strings are shown verbatim on the dashboard, so they are written
+// as sentences rather than following the usual Go error-string style.
+//
+//goland:noinspection GoErrorStringFormat
 func validateConfig(raw []byte) (CircuitConfig, error) {
 	var rc rawConfig
 	if err := json.Unmarshal(raw, &rc); err != nil {
 		return CircuitConfig{}, fmt.Errorf("invalid JSON: %w", err)
 	}
 	if len(rc.Circuits) != numCircuits {
+		//lint:ignore ST1005 shown verbatim on the dashboard
 		return CircuitConfig{}, errors.New("Configuration must contain exactly 8 circuits.")
 	}
 	out := CircuitConfig{Version: 1}
@@ -82,9 +87,11 @@ func validateConfig(raw []byte) (CircuitConfig, error) {
 		start := toNumber(src["startSOC"])
 		stop := toNumber(src["stopSOC"])
 		if !isFinite(start) || !isFinite(stop) || start < 0 || start > 100 || stop < 0 || stop > 100 {
+			//lint:ignore ST1005 shown verbatim on the dashboard
 			return CircuitConfig{}, fmt.Errorf("Circuit %d: SOC must be between 0 and 100.", i+1)
 		}
 		if start <= stop {
+			//lint:ignore ST1005 shown verbatim on the dashboard
 			return CircuitConfig{}, fmt.Errorf("Circuit %d: Start SOC must be greater than Stop SOC.", i+1)
 		}
 		name := ""
