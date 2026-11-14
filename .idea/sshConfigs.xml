@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="SshConfigs">
+    <configs>
+      <sshConfig authType="PASSWORD" host="ibproto1" id="c9750a41-94fe-4a1d-9d23-5784783b0b23" port="22" nameFormat="DESCRIPTIVE" username="egadmin" useOpenSSHConfig="true" />
+    </configs>
+  </component>
+</project>

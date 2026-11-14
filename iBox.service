@@ -1,0 +1,17 @@
+[Unit]
+Description=IBox (SOC load controller)
+After=network.target
+
+[Service]
+# Runs as root: full access to the serial ports and port 80.
+User=root
+ExecStart=/usr/local/bin/iBox \
+    -eg4-port /dev/ttySC0 \
+    -relay-port /dev/ttySC1 \
+    -config /home/egadmin/circuit-config.json \
+    -listen :80
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

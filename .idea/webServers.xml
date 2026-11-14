@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="ff308c4d-d45e-4e32-bc3b-c9f877487e11" name="ibproto1">
+        <fileTransfer rootFolder="/projects" accessType="SFTP" host="ibproto1" port="22" sshConfigId="c9750a41-94fe-4a1d-9d23-5784783b0b23" sshConfig="egadmin@ibproto1:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" isUseRsync="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
