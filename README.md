@@ -41,13 +41,14 @@ Because it runs as root, a config saved from the dashboard is written as a root-
 -relay-port /dev/ttySC1      -relay-baud 9600  -relay-unit 1
 -config /home/egadmin/circuit-config.json
 -listen :80                  -poll 5s
--relay-hw-simulated=true     start with the software relay model (as the flow did)
+-relay-hw-simulated=false    true = start with the software relay model (bench testing)
 -no-eg4                      don't poll the inverter (bench testing with the simulator)
 ```
 
-When the real relay module is wired up, either flip **Simulate Relay Hardware** off on the test page
-or start with `-relay-hw-simulated=false` in the service file (the toggle, like Node-RED's
-in-memory globals, resets on restart).
+On startup live EG4 read and Relay Actions are ON and Simulate Relay Hardware is OFF, so the real
+relay module is driven. For bench testing without a relay module, flip **Simulate Relay Hardware** on
+on the test page or add `-relay-hw-simulated` to the service file (the toggles, like Node-RED's
+in-memory globals, reset on restart).
 
 ## Build from source
 

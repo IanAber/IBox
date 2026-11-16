@@ -31,7 +31,7 @@ func main() {
 		configPath  = flag.String("config", "/home/egadmin/circuit-config.json", "circuit configuration file")
 		listen      = flag.String("listen", ":80", "HTTP listen address for the dashboard")
 		poll        = flag.Duration("poll", 5*time.Second, "EG4 poll interval")
-		hwSimulated = flag.Bool("relay-hw-simulated", true, "start with relay hardware simulated (no relay module connected)")
+		hwSimulated = flag.Bool("relay-hw-simulated", false, "start with relay hardware simulated (for bench testing with no relay module connected)")
 		noEG4       = flag.Bool("no-eg4", false, "do not poll the inverter at all (bench testing with the simulator)")
 	)
 	flag.Parse()

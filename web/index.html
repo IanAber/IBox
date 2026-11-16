@@ -344,7 +344,7 @@
     ['gridExport', 'Grid Export (W)', 100, 'grid_export_w'],
   ];
   const vals = { gridVoltage: 0, gridFrequency: 0, gridImport: 0, gridExport: 0, soc: 80, batteryVoltage: 51.2, batteryPower: 0, pv1Power: 3000, pv2Power: 3000, epsPower: 2000, epsL1Power: 1000, epsL2Power: 1000, epsVoltage: 240, epsFrequency: 60 };
-  const sim = { readEnabled: true, relayActionsEnabled: true, relayHwSimulated: true, data: {} };
+  const sim = { readEnabled: true, relayActionsEnabled: true, relayHwSimulated: false, data: {} };
   const inputs = {};
 
   FIELDS.forEach(([key, label, step]) => {
