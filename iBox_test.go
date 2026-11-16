@@ -16,8 +16,9 @@ func TestApplyBlock1(t *testing.T) {
 	regs[4] = 532        // 53.2 V
 	regs[5] = 98<<8 | 76 // SOH 98, SOC 76
 	regs[7], regs[8] = 2100, 1900
-	regs[12] = 2425 // grid 242.5 V
-	regs[15] = 5998 // grid 59.98 Hz
+	regs[10], regs[11] = 0, 1064 // discharging 1064 W
+	regs[12] = 2425              // grid 242.5 V
+	regs[15] = 5998              // grid 59.98 Hz
 	regs[26], regs[27] = 300, 1200
 	regs[20] = 2401 // 240.1 V
 	regs[23] = 6001 // 60.01 Hz
@@ -45,6 +46,10 @@ func TestApplyBlock1(t *testing.T) {
 	check("pv1_kwh", d.PV1EnergyTodayKWh, 12.3)
 	check("pv2_kwh", d.PV2EnergyTodayKWh, 4.5)
 	check("out_kwh", d.EnergyOutputTodayKWh, 6.7)
+	check("batt_discharge", d.BatteryDischargeW, 1064)
+	if amps, ok := d.BatteryCurrentA(); !ok || amps != -20 { // -1064 W / 53.2 V
+		t.Errorf("battery current = %v (ok %v), want -20", amps, ok)
+	}
 	check("grid_voltage", d.GridVoltageV, 242.5)
 	check("grid_freq", d.GridFrequencyHz, 59.98)
 	check("grid_export", d.GridExportW, 300)
@@ -331,5 +336,15 @@ func TestRelayFailureRecordedByController(t *testing.T) {
 	}
 	if h := app.Health(); h.Relays.State != healthError || h.Relays.Detail == "" {
 		t.Errorf("relay failure not reported: %+v", h.Relays)
+	}
+}
+
+func TestBatteryCurrentUnknown(t *testing.T) {
+	if _, ok := (EG4Data{BatteryVoltageV: 52}).BatteryCurrentA(); ok {
+		t.Error("no power reading should give no current")
+	}
+	p := 1000.0
+	if _, ok := (EG4Data{BatteryPowerW: &p}).BatteryCurrentA(); ok {
+		t.Error("zero voltage should give no current")
 	}
 }

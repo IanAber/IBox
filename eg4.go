@@ -37,7 +37,9 @@ type EG4Data struct {
 	GridFrequencyHz      float64  `json:"grid_frequency_hz"`
 	GridImportW          float64  `json:"grid_import_w"`
 	GridExportW          float64  `json:"grid_export_w"`
-	BatteryPowerW        *float64 `json:"battery_power_w,omitempty"` // simulator only
+	BatteryChargeW       float64  `json:"battery_charge_w"`
+	BatteryDischargeW    float64  `json:"battery_discharge_w"`
+	BatteryPowerW        *float64 `json:"battery_power_w,omitempty"` // + charging, - discharging
 	LastUpdated          string   `json:"last_updated,omitempty"`
 }
 
@@ -61,6 +63,16 @@ const (
 	gridMinFrequencyHz = 57.0
 	gridMaxFrequencyHz = 63.0
 )
+
+// BatteryCurrentA derives battery current from battery power and voltage:
+// positive while charging, negative while discharging. ok is false when
+// power or a usable voltage is missing.
+func (d EG4Data) BatteryCurrentA() (amps float64, ok bool) {
+	if d.BatteryPowerW == nil || d.BatteryVoltageV < 1 {
+		return 0, false
+	}
+	return round(*d.BatteryPowerW/d.BatteryVoltageV, 1), true
+}
 
 // GridAvailable reports whether utility power is present on the inverter's
 // grid input.
@@ -92,12 +104,16 @@ func applyBlock1(d *EG4Data, regs []uint16) error {
 	r := func(i int) float64 { return float64(regs[i]) }
 	d.PV1VoltageV = round(r(1)*0.1, 1)
 	d.PV2VoltageV = round(r(2)*0.1, 1)
-	d.BatteryVoltageV = round(r(4)*0.1, 1)    // unconfirmed for 6000XP - verify
+	d.BatteryVoltageV = round(r(4)*0.1, 1)    // confirmed against the 6000XP display
 	d.BatterySOCPct = float64(regs[5] & 0xFF) // low byte
 	d.BatterySOHPct = float64(regs[5] >> 8)   // high byte
 	d.PV1PowerW = r(7)
 	d.PV2PowerW = r(8)
 	d.PVTotalPowerW = r(7) + r(8)
+	d.BatteryChargeW = r(10)    // Pcharge
+	d.BatteryDischargeW = r(11) // Pdischarge
+	p := r(10) - r(11)
+	d.BatteryPowerW = &p
 	d.GridVoltageV = round(r(12)*0.1, 1)     // VacR, L1-L2 on split phase
 	d.GridFrequencyHz = round(r(15)*0.01, 2) // Fac
 	d.EPSVoltageV = round(r(20)*0.1, 1)

@@ -33,6 +33,7 @@ type CircuitStatus struct {
 type DashboardStatus struct {
 	Circuits            []CircuitStatus `json:"circuits"`
 	CurrentSOC          float64         `json:"currentSOC"`
+	BatteryCurrentA     *float64        `json:"batteryCurrentA,omitempty"` // + charging, - discharging
 	GridAvailable       bool            `json:"gridAvailable"`
 	GridVoltageV        float64         `json:"gridVoltageV"`
 	GridOverride        bool            `json:"gridOverride"`        // grid stable long enough: all circuits ON
@@ -175,8 +176,13 @@ func (a *App) evaluateOnce() bool {
 	var writes []relayWrite
 	grid := !a.gridSince.IsZero()
 	override, remaining := a.gridOverrideLocked(now)
+	var battA *float64
+	if amps, ok := a.data.BatteryCurrentA(); ok {
+		battA = &amps
+	}
 	status := &DashboardStatus{
-		CurrentSOC: soc, GridAvailable: grid, GridVoltageV: a.data.GridVoltageV,
+		BatteryCurrentA: battA,
+		CurrentSOC:      soc, GridAvailable: grid, GridVoltageV: a.data.GridVoltageV,
 		GridOverride: override, GridStableRemaining: int(math.Ceil(remaining.Seconds())),
 		RelayActionsEnabled: actions, RelayHWSimulated: hwSim,
 	}
