@@ -8,7 +8,7 @@ User=root
 ExecStart=/usr/local/bin/iBox \
     -eg4-port /dev/ttySC0 \
     -relay-port /dev/ttySC1 \
-    -config /home/egadmin/circuit-config.json \
+    -config /etc/ibox.config \
     -listen :80
 Restart=always
 RestartSec=5

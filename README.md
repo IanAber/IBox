@@ -11,8 +11,9 @@ One static binary that replaces all four Node-RED tabs:
 
 The dashboard is now on the standard web port 80: `http://<pi>/dashboard/configuration` and
 `http://<pi>/dashboard/eg4-test` (`http://<pi>/` redirects to the dashboard). Use `-listen :1880`
-to go back to the old Node-RED port. The config file format and path are unchanged, so an existing
-`/home/egadmin/circuit-config.json` is picked up as-is.
+to go back to the old Node-RED port. The config file format is unchanged; it now lives at
+`/etc/ibox.config`. `Install.sh` moves an existing `/home/egadmin/circuit-config.json` there the
+first time it runs (leaving the old file as `circuit-config.json.migrated`).
 
 ## Install on the Pi
 
@@ -32,14 +33,14 @@ extra setup. Nothing else on the Pi may be using port 80 (check with `sudo ss -l
 stop Apache/nginx/lighttpd if one is installed). To run it by hand outside systemd, use `sudo ibox`.
 
 Because it runs as root, a config saved from the dashboard is written as a root-owned file. Use
-`sudo` if you want to edit `/home/egadmin/circuit-config.json` by hand.
+`sudo` if you want to edit `/etc/ibox.config` by hand.
 
 ## Options
 
 ```
 -eg4-port /dev/ttySC0        -eg4-baud 19200   -eg4-unit 1
 -relay-port /dev/ttySC1      -relay-baud 9600  -relay-unit 1
--config /home/egadmin/circuit-config.json
+-config /etc/ibox.config
 -listen :80                  -poll 5s
 -relay-hw-simulated=false    true = start with the software relay model (bench testing)
 -no-eg4                      don't poll the inverter (bench testing with the simulator)

@@ -28,7 +28,7 @@ func main() {
 		relayPort   = flag.String("relay-port", "/dev/ttySC1", "serial port for the relay module")
 		relayBaud   = flag.Int("relay-baud", 9600, "relay module baud rate")
 		relayUnit   = flag.Int("relay-unit", 1, "relay module Modbus unit ID")
-		configPath  = flag.String("config", "/home/egadmin/circuit-config.json", "circuit configuration file")
+		configPath  = flag.String("config", "/etc/ibox.config", "circuit configuration file (JSON)")
 		listen      = flag.String("listen", ":80", "HTTP listen address for the dashboard")
 		poll        = flag.Duration("poll", 5*time.Second, "EG4 poll interval")
 		hwSimulated = flag.Bool("relay-hw-simulated", false, "start with relay hardware simulated (for bench testing with no relay module connected)")
