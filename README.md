@@ -84,6 +84,12 @@ GET  /dashboard/events              Server-Sent Events: config, status, simstate
 5. **Test page mirrors live data continuously** while live read is on (the flow only refreshed it on
    toggle/page load).
 6. **Config file is written atomically** (temp file + rename) to survive power loss.
+7. **Grid input is read and overrides SOC control.** Input registers 12 (grid voltage, 0.1 V),
+   15 (grid frequency, 0.01 Hz), 26 (export W) and 27 (import W) are parsed from the existing 0-39
+   read. When grid has been present (200-270 V and 57-63 Hz) continuously for `gridStableSeconds`
+   (config file / Configuration page, default 300, 0 = immediate; any grid-absent reading restarts
+   the count) every relay is turned ON regardless of SOC. When grid drops, the normal start/stop hysteresis resumes from the all-on state, so circuits stay
+   on until SOC falls to their Stop value. Relay Actions off still blocks all writes.
 
 Unchanged: register map and scaling, hysteresis rule, relay retry every 5 s until read-back confirms,
 100 ms gap between relay writes, config validation rules and messages, defaults

@@ -27,6 +27,16 @@
   .hidden { display:none !important; }
 
   /* configuration page */
+  .banners { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:18px; }
+  .banners .soc-banner { margin-bottom:0; }
+  /*noinspection CssUnusedSymbol*/
+  .soc-value.grid-on { color:var(--success); }
+  .setting { display:flex; align-items:center; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
+  .setting label { font-weight:500; }
+  .setting input { width:110px; }
+  .setting .hint { font-size:.85rem; opacity:.7; }
+  /*noinspection CssUnusedSymbol*/
+  .soc-value.grid-wait { color:#b26a00; }
   .soc-banner { display:flex; align-items:baseline; gap:10px; padding:10px 16px; margin-bottom:18px; border:1px solid rgba(128,128,128,.35); border-radius:8px; width:fit-content; }
   .soc-label { font-weight:500; opacity:.75; }
   .soc-value { font-size:1.6rem; font-weight:700; }
@@ -85,8 +95,16 @@
   <!-- ===== Configuration ===== -->
   <section id="view-config" class="card hidden">
     <div class="title">Circuit SOC Configuration</div>
-    <div class="subtitle">A circuit starts when battery SOC rises to its Start value and stops when SOC falls to its Stop value.</div>
-    <div class="soc-banner"><span class="soc-label">Current Battery SOC</span><span class="soc-value" id="soc-value">—</span></div>
+    <div class="subtitle">A circuit starts when battery SOC rises to its Start value and stops when SOC falls to its Stop value. While grid power has been available for the grid stable time, all circuits are on.</div>
+    <div class="banners">
+      <div class="soc-banner"><span class="soc-label">Current Battery SOC</span><span class="soc-value" id="soc-value">—</span></div>
+      <div class="soc-banner"><span class="soc-label">Grid</span><span class="soc-value" id="grid-value">—</span></div>
+    </div>
+    <div class="setting">
+      <label for="grid-stable">Grid stable time (seconds)</label>
+      <input type="number" id="grid-stable" min="0" max="86400" step="1">
+      <span class="hint">Grid must be present this long before all circuits turn on. 0 = immediately.</span>
+    </div>
     <div class="row header"><div>Circuit Name</div><div>Start SOC (%)</div><div>Stop SOC (%)</div><div style="text-align:center">Status</div></div>
     <div id="rows"></div>
     <div id="cfg-error" class="msg-error hidden"></div>
@@ -186,9 +204,37 @@
     $('soc-value').textContent = Number.isFinite(n) ? n + '%' : '—';
   }
 
+  let gridStable = 300;
+  $('grid-stable').oninput = e => { gridStable = e.target.value === '' ? '' : Number(e.target.value); };
+
+  // Countdown runs locally between status updates so it ticks every second.
+  let gridDeadline = 0, gridV = '', gridTick = null;
+  const fmtSecs = s => s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`;
+  function renderGrid() {
+    const e = $('grid-value');
+    const left = Math.max(0, Math.ceil((gridDeadline - Date.now()) / 1000));
+    e.textContent = `Available${gridV} — all ON in ${fmtSecs(left)}`;
+    if (left === 0) { clearInterval(gridTick); gridTick = null; }
+  }
+  function setGrid(st) {
+    const e = $('grid-value');
+    clearInterval(gridTick); gridTick = null;
+    if (st.gridAvailable === undefined) { e.textContent = '—'; e.className = 'soc-value'; return; }
+    const v = Number(st.gridVoltageV);
+    gridV = Number.isFinite(v) ? ` (${v} V)` : '';
+    if (!st.gridAvailable) { e.textContent = 'Not available'; e.className = 'soc-value'; return; }
+    if (st.gridOverride) { e.textContent = `Available${gridV} — all ON`; e.className = 'soc-value grid-on'; return; }
+    e.className = 'soc-value grid-wait';
+    gridDeadline = Date.now() + (Number(st.gridStableRemaining) || 0) * 1000;
+    renderGrid();
+    gridTick = setInterval(renderGrid, 1000);
+  }
+
   function onConfig(cfg) {
     // Config load/save/reload: replace editable values, keep last relay state.
     const prev = circuits;
+    gridStable = cfg.gridStableSeconds ?? 300;
+    $('grid-stable').value = gridStable;
     circuits = cfg.circuits.map((c, i) => ({ ...c, enabled: !!(prev[i] && prev[i].enabled), desiredState: prev[i] && prev[i].desiredState }));
     loaded = true;
     hide('cfg-error');
@@ -197,6 +243,7 @@
 
   function onStatus(st) {
     if (st.currentSOC !== undefined) setSOC(st.currentSOC);
+    setGrid(st);
     if (!Array.isArray(st.circuits)) return;
     if (loaded) {
       // Only touch ON/OFF state, never fields the user may be editing.
@@ -208,6 +255,9 @@
   }
 
   function validate() {
+    const g = Number(gridStable);
+    if (gridStable === '' || !Number.isInteger(g) || g < 0 || g > 86400)
+      return 'Grid stable time must be a whole number of seconds between 0 and 86400.';
     for (let i = 0; i < circuits.length; i++) {
       const s = Number(circuits[i].startSOC), p = Number(circuits[i].stopSOC);
       if (circuits[i].startSOC === '' || circuits[i].stopSOC === '' || !Number.isFinite(s) || !Number.isFinite(p) || s < 0 || s > 100 || p < 0 || p > 100)
@@ -225,7 +275,7 @@
     const err = validate();
     if (err) { show('cfg-error', err); return; }
     hide('cfg-error');
-    const cfg = { version: 1, circuits: circuits.map((c, i) => ({ id: i + 1, name: String(c.name ?? '').trim() || `Circuit ${i + 1}`, startSOC: Number(c.startSOC), stopSOC: Number(c.stopSOC) })) };
+    const cfg = { version: 1, gridStableSeconds: Number(gridStable), circuits: circuits.map((c, i) => ({ id: i + 1, name: String(c.name ?? '').trim() || `Circuit ${i + 1}`, startSOC: Number(c.startSOC), stopSOC: Number(c.stopSOC) })) };
     try {
       await post('/api/config', cfg);
       show('cfg-saved');
@@ -250,8 +300,12 @@
     ['epsL2Power', 'EPS L2 Power (W)', 100, 'eps_l2_power_w'],
     ['epsVoltage', 'EPS Voltage (V)', 0.1, 'eps_voltage_v'],
     ['epsFrequency', 'EPS Frequency (Hz)', 0.01, 'eps_frequency_hz'],
+    ['gridVoltage', 'Grid Voltage (V)', 0.1, 'grid_voltage_v'],
+    ['gridFrequency', 'Grid Frequency (Hz)', 0.01, 'grid_frequency_hz'],
+    ['gridImport', 'Grid Import (W)', 100, 'grid_import_w'],
+    ['gridExport', 'Grid Export (W)', 100, 'grid_export_w'],
   ];
-  const vals = { soc: 80, batteryVoltage: 51.2, batteryPower: 0, pv1Power: 3000, pv2Power: 3000, epsPower: 2000, epsL1Power: 1000, epsL2Power: 1000, epsVoltage: 240, epsFrequency: 60 };
+  const vals = { gridVoltage: 0, gridFrequency: 0, gridImport: 0, gridExport: 0, soc: 80, batteryVoltage: 51.2, batteryPower: 0, pv1Power: 3000, pv2Power: 3000, epsPower: 2000, epsL1Power: 1000, epsL2Power: 1000, epsVoltage: 240, epsFrequency: 60 };
   const sim = { readEnabled: true, relayActionsEnabled: true, relayHwSimulated: true, data: {} };
   const inputs = {};
 
@@ -266,6 +320,16 @@
     const b = document.createElement('button'); b.textContent = `SOC ${v}%`;
     b.onclick = () => preset(v); $('presets').appendChild(b);
   });
+  [['Grid ON', 240, 60], ['Grid OFF', 0, 0]].forEach(([label, v, hz]) => {
+    const b = document.createElement('button'); b.textContent = label;
+    b.onclick = () => {
+      if (sim.readEnabled) return;
+      vals.gridVoltage = v; inputs.gridVoltage.value = v;
+      vals.gridFrequency = hz; inputs.gridFrequency.value = hz;
+      renderSim(); sendData();
+    };
+    $('presets').appendChild(b);
+  });
 
   const n = v => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
   function makeData() {
@@ -275,6 +339,8 @@
       pv1_power_w: n(vals.pv1Power), pv2_power_w: n(vals.pv2Power), pv_total_power_w: n(vals.pv1Power) + n(vals.pv2Power),
       eps_voltage_v: n(vals.epsVoltage), eps_frequency_hz: n(vals.epsFrequency), eps_total_power_w: n(vals.epsPower),
       eps_l1_power_w: n(vals.epsL1Power), eps_l2_power_w: n(vals.epsL2Power), battery_power_w: n(vals.batteryPower),
+      grid_voltage_v: n(vals.gridVoltage), grid_frequency_hz: n(vals.gridFrequency),
+      grid_import_w: n(vals.gridImport), grid_export_w: n(vals.gridExport),
       pv1_energy_today_kwh: 0, pv2_energy_today_kwh: 0, energy_output_today_kwh: 0,
       last_updated: new Date().toISOString(),
     };

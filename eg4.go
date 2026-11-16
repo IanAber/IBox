@@ -33,6 +33,10 @@ type EG4Data struct {
 	EnergyOutputTodayKWh float64  `json:"energy_output_today_kwh"`
 	EPSL1PowerW          float64  `json:"eps_l1_power_w"`
 	EPSL2PowerW          float64  `json:"eps_l2_power_w"`
+	GridVoltageV         float64  `json:"grid_voltage_v"`
+	GridFrequencyHz      float64  `json:"grid_frequency_hz"`
+	GridImportW          float64  `json:"grid_import_w"`
+	GridExportW          float64  `json:"grid_export_w"`
 	BatteryPowerW        *float64 `json:"battery_power_w,omitempty"` // simulator only
 	LastUpdated          string   `json:"last_updated,omitempty"`
 }
@@ -46,6 +50,23 @@ func defaultEG4Data() EG4Data {
 		EPSVoltageV:     240,
 		EPSFrequencyHz:  60,
 	}
+}
+
+// Grid is considered available when the inverter's AC input is inside these
+// limits. They are deliberately wider than the inverter's own reconnect
+// window: we only need to know that utility power is present.
+const (
+	gridMinVoltageV    = 200.0
+	gridMaxVoltageV    = 270.0
+	gridMinFrequencyHz = 57.0
+	gridMaxFrequencyHz = 63.0
+)
+
+// GridAvailable reports whether utility power is present on the inverter's
+// grid input.
+func (d EG4Data) GridAvailable() bool {
+	return d.GridVoltageV >= gridMinVoltageV && d.GridVoltageV <= gridMaxVoltageV &&
+		d.GridFrequencyHz >= gridMinFrequencyHz && d.GridFrequencyHz <= gridMaxFrequencyHz
 }
 
 func round(v float64, places int) float64 {
@@ -77,9 +98,13 @@ func applyBlock1(d *EG4Data, regs []uint16) error {
 	d.PV1PowerW = r(7)
 	d.PV2PowerW = r(8)
 	d.PVTotalPowerW = r(7) + r(8)
+	d.GridVoltageV = round(r(12)*0.1, 1)     // VacR, L1-L2 on split phase
+	d.GridFrequencyHz = round(r(15)*0.01, 2) // Fac
 	d.EPSVoltageV = round(r(20)*0.1, 1)
 	d.EPSFrequencyHz = round(r(23)*0.01, 2)
 	d.EPSTotalPowerW = r(24)
+	d.GridExportW = r(26) // Ptogrid
+	d.GridImportW = r(27) // Ptouser
 	d.PV1EnergyTodayKWh = round(r(28)*0.1, 1)
 	d.PV2EnergyTodayKWh = round(r(29)*0.1, 1)
 	d.EnergyOutputTodayKWh = round(r(35)*0.1, 1)
@@ -186,6 +211,7 @@ func (a *App) pollOnce(r *EG4Reader, failing *bool) {
 	d.LastUpdated = time.Now().UTC().Format(time.RFC3339Nano)
 	a.data = d
 	a.haveData = true
+	a.noteGridLocked(d)
 	a.mu.Unlock()
 
 	a.hub.Broadcast("data", d)

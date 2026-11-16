@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"log"
+	"math"
 	"sync"
 	"time"
 )
@@ -32,6 +33,10 @@ type CircuitStatus struct {
 type DashboardStatus struct {
 	Circuits            []CircuitStatus `json:"circuits"`
 	CurrentSOC          float64         `json:"currentSOC"`
+	GridAvailable       bool            `json:"gridAvailable"`
+	GridVoltageV        float64         `json:"gridVoltageV"`
+	GridOverride        bool            `json:"gridOverride"`        // grid stable long enough: all circuits ON
+	GridStableRemaining int             `json:"gridStableRemaining"` // seconds until override, while waiting
 	RelayActionsEnabled bool            `json:"relayActionsEnabled"`
 	RelayHWSimulated    bool            `json:"relayHwSimulated"`
 }
@@ -57,6 +62,9 @@ type App struct {
 	relayStates [8]bool
 	pending     map[int]pendingCmd
 	lastStatus  *DashboardStatus
+	gridSince   time.Time   // start of the current run of grid-present readings; zero while absent
+	gridTimer   *time.Timer // re-evaluates when the grid stable delay expires
+	now         func() time.Time
 
 	configPath string
 	relays     *RelayModule
@@ -76,6 +84,7 @@ func NewApp(configPath string, relays *RelayModule, hub *Hub, hwSimulated bool) 
 		relays:              relays,
 		hub:                 hub,
 		evalCh:              make(chan struct{}, 1),
+		now:                 time.Now,
 	}
 }
 
@@ -155,16 +164,26 @@ func (a *App) evaluateOnce() bool {
 	// Re-read flags: they may have been toggled while the relay read ran.
 	hwSim = a.relayHWSimulated
 	actions := a.relayActionsEnabled
-	now := time.Now()
+	now := a.now()
 	var writes []relayWrite
-	status := &DashboardStatus{CurrentSOC: soc, RelayActionsEnabled: actions, RelayHWSimulated: hwSim}
+	grid := !a.gridSince.IsZero()
+	override, remaining := a.gridOverrideLocked(now)
+	status := &DashboardStatus{
+		CurrentSOC: soc, GridAvailable: grid, GridVoltageV: a.data.GridVoltageV,
+		GridOverride: override, GridStableRemaining: int(math.Ceil(remaining.Seconds())),
+		RelayActionsEnabled: actions, RelayHWSimulated: hwSim,
+	}
 
 	for i, c := range a.cfg.Circuits {
 		if i >= 8 {
 			break
 		}
 		current := a.relayStates[i]
-		want := desiredState(soc, c.StartSOC, c.StopSOC, current)
+		// Grid present for the configured stable time: every circuit runs.
+		// When the grid drops, the SOC hysteresis takes over from the current
+		// (all-on) state, so circuits keep running until SOC falls to their
+		// Stop value.
+		want := override || desiredState(soc, c.StartSOC, c.StopSOC, current)
 		reported := current
 
 		if want != current && actions {
@@ -193,13 +212,49 @@ func (a *App) evaluateOnce() bool {
 		if err := a.relays.WriteCoil(w.addr, w.state); err != nil {
 			log.Printf("control: write relay %d (%s) -> %v failed: %v", w.addr+1, w.name, onOff(w.state), err)
 		} else {
-			log.Printf("control: relay %d (%s) -> %s at SOC %.0f%%", w.addr+1, w.name, onOff(w.state), soc)
+			log.Printf("control: relay %d (%s) -> %s at SOC %.0f%% (grid override %s)", w.addr+1, w.name, onOff(w.state), soc, onOff(override))
 		}
 		time.Sleep(relayCommandGap)
 	}
 
 	a.hub.Broadcast("status", status)
 	return true
+}
+
+// noteGridLocked records grid presence from a new reading. Call with a.mu
+// held whenever a.data is replaced. Any reading without grid restarts the
+// stable-time count.
+func (a *App) noteGridLocked(d EG4Data) {
+	present := d.GridAvailable()
+	switch {
+	case present && a.gridSince.IsZero():
+		a.gridSince = a.now()
+		log.Printf("control: grid present (%.1f V, %.2f Hz); waiting %ds before forcing circuits ON",
+			d.GridVoltageV, d.GridFrequencyHz, a.cfg.GridStableSeconds)
+	case !present && !a.gridSince.IsZero():
+		a.gridSince = time.Time{}
+		log.Printf("control: grid absent (%.1f V, %.2f Hz); SOC control resumes", d.GridVoltageV, d.GridFrequencyHz)
+	}
+}
+
+// gridOverrideLocked reports whether grid has been present for the
+// configured stable time, and otherwise how long is left. While waiting it
+// arms a timer so the override kicks in on time even if no new reading
+// arrives (the simulator only sends data on demand).
+func (a *App) gridOverrideLocked(now time.Time) (bool, time.Duration) {
+	if a.gridTimer != nil {
+		a.gridTimer.Stop()
+		a.gridTimer = nil
+	}
+	if a.gridSince.IsZero() {
+		return false, 0
+	}
+	remaining := time.Duration(a.cfg.GridStableSeconds)*time.Second - now.Sub(a.gridSince)
+	if remaining <= 0 {
+		return true, 0
+	}
+	a.gridTimer = time.AfterFunc(remaining, a.TriggerEvaluate)
+	return false, remaining
 }
 
 func onOff(b bool) string {
@@ -272,6 +327,7 @@ func (a *App) StoreSimulatedData(d EG4Data) bool {
 	d.LastUpdated = time.Now().UTC().Format(time.RFC3339Nano)
 	a.data = d
 	a.haveData = true
+	a.noteGridLocked(d)
 	a.mu.Unlock()
 	a.hub.Broadcast("data", d)
 	a.TriggerEvaluate()

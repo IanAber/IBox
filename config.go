@@ -17,6 +17,13 @@ import (
 
 const numCircuits = 8
 
+// defaultGridStableSeconds is how long grid power must be continuously
+// present before every circuit is forced ON. Used when the config file
+// predates the setting.
+const defaultGridStableSeconds = 300
+
+const maxGridStableSeconds = 86400
+
 type Circuit struct {
 	ID       int     `json:"id"`
 	Name     string  `json:"name"`
@@ -25,12 +32,13 @@ type Circuit struct {
 }
 
 type CircuitConfig struct {
-	Version  int       `json:"version"`
-	Circuits []Circuit `json:"circuits"`
+	Version           int       `json:"version"`
+	GridStableSeconds int       `json:"gridStableSeconds"`
+	Circuits          []Circuit `json:"circuits"`
 }
 
 func defaultConfig() CircuitConfig {
-	c := CircuitConfig{Version: 1}
+	c := CircuitConfig{Version: 1, GridStableSeconds: defaultGridStableSeconds}
 	for i := 0; i < numCircuits; i++ {
 		c.Circuits = append(c.Circuits, Circuit{
 			ID: i + 1, Name: fmt.Sprintf("Circuit %d", i+1), StartSOC: 80, StopSOC: 60,
@@ -42,7 +50,8 @@ func defaultConfig() CircuitConfig {
 // rawConfig accepts loosely typed input (numbers as strings, etc.) the same
 // way the JS Number() calls did.
 type rawConfig struct {
-	Circuits []map[string]any `json:"circuits"`
+	GridStableSeconds any              `json:"gridStableSeconds"`
+	Circuits          []map[string]any `json:"circuits"`
 }
 
 func toNumber(v any) float64 {
@@ -82,7 +91,15 @@ func validateConfig(raw []byte) (CircuitConfig, error) {
 		//lint:ignore ST1005 shown verbatim on the dashboard
 		return CircuitConfig{}, errors.New("Configuration must contain exactly 8 circuits.")
 	}
-	out := CircuitConfig{Version: 1}
+	out := CircuitConfig{Version: 1, GridStableSeconds: defaultGridStableSeconds}
+	if rc.GridStableSeconds != nil { // missing -> default, so older files still load
+		g := toNumber(rc.GridStableSeconds)
+		if !isFinite(g) || g < 0 || g > maxGridStableSeconds || g != math.Trunc(g) {
+			//lint:ignore ST1005 shown verbatim on the dashboard
+			return CircuitConfig{}, fmt.Errorf("Grid stable time must be a whole number of seconds between 0 and %d.", maxGridStableSeconds)
+		}
+		out.GridStableSeconds = int(g)
+	}
 	for i, src := range rc.Circuits {
 		start := toNumber(src["startSOC"])
 		stop := toNumber(src["stopSOC"])
