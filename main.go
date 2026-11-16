@@ -45,9 +45,12 @@ func main() {
 	defer relays.Close()
 
 	app := NewApp(*configPath, relays, hub, *hwSimulated)
+	app.eg4Polling = !*noEG4
+	app.pollEvery = *poll
 	app.LoadConfigFromDisk()
 
 	go app.RunController(ctx)
+	go app.RunHealth(ctx)
 
 	if *noEG4 {
 		log.Printf("eg4: polling disabled (-no-eg4); use the test simulator page")

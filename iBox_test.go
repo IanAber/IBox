@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -277,5 +278,58 @@ func TestGridTimerFiresEvaluation(t *testing.T) {
 	app.evaluateOnce()
 	if !app.relayStates[0] {
 		t.Fatal("circuit should be ON after the timer fired")
+	}
+}
+
+func TestHealth(t *testing.T) {
+	app := NewApp(filepath.Join(t.TempDir(), "c.json"), NewRelayModule("/dev/null-does-not-exist", 9600, 1), NewHub(), false)
+	clock := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	app.now = func() time.Time { return clock }
+	app.eg4Polling = true
+	app.pollEvery = 5 * time.Second
+
+	state := func() (string, string) { h := app.Health(); return h.EG4.State, h.Relays.State }
+	expect := func(what, wantEG4, wantRelay string) {
+		t.Helper()
+		if e, r := state(); e != wantEG4 || r != wantRelay {
+			t.Errorf("%s: eg4=%s relays=%s, want %s/%s", what, e, r, wantEG4, wantRelay)
+		}
+	}
+
+	expect("startup", healthWarning, healthOK)
+	app.recordEG4(nil)
+	expect("first reading", healthOK, healthOK)
+	clock = clock.Add(16 * time.Second)
+	expect("stale", healthError, healthOK)
+	app.recordEG4(errors.New("serial: timeout"))
+	if h := app.Health(); h.EG4.State != healthError || h.EG4.Detail != "serial: timeout" || h.EG4.LastOK == "" {
+		t.Errorf("read error: %+v", h.EG4)
+	}
+	app.recordEG4(nil)
+	expect("recovered", healthOK, healthOK)
+
+	app.recordRelay(errors.New("no response"))
+	expect("relay error", healthOK, healthError)
+	app.recordRelay(nil)
+	expect("relay recovered", healthOK, healthOK)
+
+	app.SetRelayHWSimulated(true)
+	app.SetReadEnabled(false)
+	expect("test mode + simulated relays", healthWarning, healthWarning)
+
+	app.eg4Polling = false
+	expect("-no-eg4", healthWarning, healthWarning)
+}
+
+func TestRelayFailureRecordedByController(t *testing.T) {
+	app := NewApp(filepath.Join(t.TempDir(), "c.json"), NewRelayModule("/dev/null-does-not-exist", 9600, 1), NewHub(), false)
+	app.LoadConfigFromDisk()
+	app.SetReadEnabled(false)
+	app.StoreSimulatedData(EG4Data{BatterySOCPct: 50})
+	if app.evaluateOnce() {
+		t.Fatal("evaluation should fail without a relay module")
+	}
+	if h := app.Health(); h.Relays.State != healthError || h.Relays.Detail == "" {
+		t.Errorf("relay failure not reported: %+v", h.Relays)
 	}
 }

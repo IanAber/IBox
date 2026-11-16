@@ -66,6 +66,11 @@ type App struct {
 	gridTimer   *time.Timer // re-evaluates when the grid stable delay expires
 	now         func() time.Time
 
+	eg4Polling bool          // false with -no-eg4
+	pollEvery  time.Duration // EG4 poll interval, for staleness
+	eg4Comm    commState
+	relayComm  commState
+
 	configPath string
 	relays     *RelayModule
 	hub        *Hub
@@ -85,6 +90,7 @@ func NewApp(configPath string, relays *RelayModule, hub *Hub, hwSimulated bool) 
 		hub:                 hub,
 		evalCh:              make(chan struct{}, 1),
 		now:                 time.Now,
+		pollEvery:           5 * time.Second,
 	}
 }
 
@@ -146,6 +152,7 @@ func (a *App) evaluateOnce() bool {
 	// Real hardware: read actual coil states first, clear confirmed commands.
 	if !hwSim {
 		states, err := a.relays.ReadStates()
+		a.recordRelay(err)
 		if err != nil {
 			log.Printf("control: relay read failed: %v (skipping this pass)", err)
 			return false
@@ -209,7 +216,9 @@ func (a *App) evaluateOnce() bool {
 	a.mu.Unlock()
 
 	for _, w := range writes {
-		if err := a.relays.WriteCoil(w.addr, w.state); err != nil {
+		err := a.relays.WriteCoil(w.addr, w.state)
+		a.recordRelay(err)
+		if err != nil {
 			log.Printf("control: write relay %d (%s) -> %v failed: %v", w.addr+1, w.name, onOff(w.state), err)
 		} else {
 			log.Printf("control: relay %d (%s) -> %s at SOC %.0f%% (grid override %s)", w.addr+1, w.name, onOff(w.state), soc, onOff(override))
@@ -314,6 +323,9 @@ func (a *App) SetRelayHWSimulated(v bool) {
 	a.mu.Unlock()
 	log.Printf("mode: simulate relay hardware %s", onOff(v))
 	a.hub.Broadcast("simstate", s)
+	if !v {
+		a.TriggerEvaluate() // contact the real module now rather than on the next poll
+	}
 }
 
 // StoreSimulatedData = "Store Simulated EG4 Data". Ignored while live read

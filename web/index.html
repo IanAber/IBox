@@ -37,6 +37,17 @@
   .setting .hint { font-size:.85rem; opacity:.7; }
   /*noinspection CssUnusedSymbol*/
   .soc-value.grid-wait { color:#b26a00; }
+  /* health banners are built from JS */
+  /*noinspection CssUnusedSymbol*/
+  .health { padding:10px 16px; margin-bottom:12px; border-radius:8px; border:2px solid; }
+  /*noinspection CssUnusedSymbol*/
+  .health.error { border-color:var(--error); background:rgba(211,47,47,.08); }
+  /*noinspection CssUnusedSymbol*/
+  .health.warning { border-color:#b26a00; background:rgba(178,106,0,.08); }
+  /*noinspection CssUnusedSymbol*/
+  .health b { display:block; margin-bottom:2px; }
+  /*noinspection CssUnusedSymbol*/
+  .health .detail { font-size:.85rem; opacity:.8; margin-top:4px; font-family:ui-monospace, monospace; }
   .soc-banner { display:flex; align-items:baseline; gap:10px; padding:10px 16px; margin-bottom:18px; border:1px solid rgba(128,128,128,.35); border-radius:8px; width:fit-content; }
   .soc-label { font-weight:500; opacity:.75; }
   .soc-value { font-size:1.6rem; font-weight:700; }
@@ -94,6 +105,7 @@
 <main>
   <!-- ===== Configuration ===== -->
   <section id="view-config" class="card hidden">
+    <div id="health"></div>
     <div class="title">Circuit SOC Configuration</div>
     <div class="subtitle">A circuit starts when battery SOC rises to its Start value and stops when SOC falls to its Stop value. While grid power has been available for the grid stable time, all circuits are on.</div>
     <div class="banners">
@@ -228,6 +240,32 @@
     gridDeadline = Date.now() + (Number(st.gridStableRemaining) || 0) * 1000;
     renderGrid();
     gridTick = setInterval(renderGrid, 1000);
+  }
+
+  // Communication health banners (EG4 + relay module).
+  let health = null, connected = null; // null until the first connect attempt resolves
+  function renderHealth() {
+    const box = $('health');
+    box.textContent = '';
+    const add = (state, title, msg, detail, lastOk) => {
+      const d = document.createElement('div'); d.className = 'health ' + state;
+      const b = document.createElement('b'); b.textContent = (state === 'error' ? '✖ ' : '⚠ ') + title;
+      d.append(b, document.createTextNode(msg));
+      const extra = [];
+      if (lastOk) extra.push('Last good contact: ' + new Date(lastOk).toLocaleString());
+      if (detail) extra.push(detail);
+      if (extra.length) { const x = document.createElement('div'); x.className = 'detail'; x.textContent = extra.join(' · '); d.appendChild(x); }
+      box.appendChild(d);
+    };
+    if (connected === false) {
+      add('error', 'Controller', 'Lost connection to the controller. Status on this page may be out of date.');
+      return;
+    }
+    if (!health) return;
+    [['eg4', 'EG4 6000XP'], ['relays', 'Relay module']].forEach(([k, title]) => {
+      const h = health[k];
+      if (h && h.state !== 'ok') add(h.state, title, h.message || '', h.detail, h.state === 'error' ? h.lastOk : '');
+    });
   }
 
   function onConfig(cfg) {
@@ -390,8 +428,9 @@
   // ---------------- Live updates (SSE) ----------------
   function connect() {
     const es = new EventSource('/dashboard/events');
-    es.onopen = () => { $('conn').textContent = 'connected'; };
-    es.onerror = () => { $('conn').textContent = 'reconnecting…'; };
+    es.onopen = () => { $('conn').textContent = 'connected'; connected = true; renderHealth(); };
+    es.onerror = () => { $('conn').textContent = 'reconnecting…'; connected = false; renderHealth(); };
+    es.addEventListener('health', e => { health = JSON.parse(e.data); renderHealth(); });
     es.addEventListener('config', e => onConfig(JSON.parse(e.data)));
     es.addEventListener('status', e => onStatus(JSON.parse(e.data)));
     es.addEventListener('simstate', e => {

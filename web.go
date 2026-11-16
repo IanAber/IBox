@@ -104,6 +104,7 @@ func (a *App) Routes() http.Handler {
 			"status":   a.lastStatus,
 			"sim":      a.simStateLocked(),
 			"haveData": a.haveData,
+			"health":   a.healthLocked(a.now()),
 		}
 		a.mu.Unlock()
 		writeJSON(w, 200, resp)
@@ -180,6 +181,7 @@ func (a *App) handleEvents(w http.ResponseWriter, r *http.Request) {
 	initial := [][]byte{
 		sseFrame("config", a.cfg),
 		sseFrame("simstate", a.simStateLocked()),
+		sseFrame("health", a.healthLocked(a.now())),
 	}
 	if a.lastStatus != nil {
 		initial = append(initial, sseFrame("status", a.lastStatus))

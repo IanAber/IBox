@@ -32,7 +32,7 @@ func (m *RelayModule) ReadStates() ([8]bool, error) {
 	b, err := m.client.ReadCoils(0, 8)
 	if err != nil {
 		_ = m.handler.Close() // force a clean reopen on the next attempt; the read error is what matters
-		return states, err
+		return states, fmt.Errorf("%s: read coils: %w", m.handler.Address, err)
 	}
 	if len(b) < 1 {
 		return states, fmt.Errorf("unexpected relay read response (%d bytes)", len(b))
@@ -52,8 +52,9 @@ func (m *RelayModule) WriteCoil(addr int, on bool) error {
 	_, err := m.client.WriteSingleCoil(uint16(addr), v)
 	if err != nil {
 		_ = m.handler.Close() // force a clean reopen on the next attempt; the write error is what matters
+		return fmt.Errorf("%s: write coil %d: %w", m.handler.Address, addr, err)
 	}
-	return err
+	return nil
 }
 
 func (m *RelayModule) Close() {

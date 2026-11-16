@@ -142,7 +142,7 @@ func (r *EG4Reader) readRegs(addr, qty uint16) ([]uint16, error) {
 	b, err := r.client.ReadInputRegisters(addr, qty)
 	if err != nil {
 		_ = r.handler.Close() // force a clean reopen on the next attempt; the read error is what matters
-		return nil, err
+		return nil, fmt.Errorf("%s: %w", r.handler.Address, err)
 	}
 	return bytesToRegs(b), nil
 }
@@ -171,6 +171,7 @@ func (a *App) RunPoller(ctx context.Context, r *EG4Reader, every time.Duration) 
 
 func (a *App) pollOnce(r *EG4Reader, failing *bool) {
 	regs1, err := r.readRegs(0, 40)
+	a.recordEG4(err)
 	if err != nil {
 		if !*failing {
 			log.Printf("eg4: read registers 0-39 failed: %v (will keep retrying quietly)", err)
