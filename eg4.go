@@ -35,7 +35,7 @@ type EG4Data struct {
 	EPSL2PowerW          float64  `json:"eps_l2_power_w"`
 	GenVoltageV          float64  `json:"gen_voltage_v"` // GEN port (AC-coupled solar)
 	GenFrequencyHz       float64  `json:"gen_frequency_hz"`
-	GenPowerW            float64  `json:"gen_power_w"`
+	GenPowerW            float64  `json:"gen_power_w"` // not read from the 6000XP yet; simulator only
 	GridVoltageV         float64  `json:"grid_voltage_v"`
 	GridFrequencyHz      float64  `json:"grid_frequency_hz"`
 	GridImportW          float64  `json:"grid_import_w"`
@@ -145,13 +145,10 @@ func applyBlock2(d *EG4Data, regs []uint16) error {
 	r := func(reg int) float64 { return float64(regs[reg-block2Start]) }
 	d.GenVoltageV = round(r(121)*0.1, 1)
 	d.GenFrequencyHz = round(r(122)*0.01, 2)
-	// Register 123 reads ~18500 on a 6000XP with nothing on the GEN port, so
-	// it is not plain GEN power there. Until the map is confirmed, only report
-	// GEN power while the GEN input actually has voltage.
+	// GEN power is not mapped yet: on a 6000XP register 123 reads ~19000
+	// with nothing on the GEN port and no loads, so it is not power at all.
+	// Map it from a register dump once something is connected to GEN.
 	d.GenPowerW = 0
-	if d.GenVoltageV >= 1 {
-		d.GenPowerW = r(123)
-	}
 	d.EPSL1PowerW = r(129)
 	d.EPSL2PowerW = r(130)
 	return nil

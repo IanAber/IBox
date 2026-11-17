@@ -371,7 +371,9 @@
     const num = v => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
     setFlow('dc', num(d.pv_total_power_w), `PV1 ${fmtW(num(d.pv1_power_w))} · PV2 ${fmtW(num(d.pv2_power_w))}`);
     const genV = num(d.gen_voltage_v);
-    setFlow('ac', num(d.gen_power_w), genV >= 1 ? `${genV.toFixed(0)} V · ${num(d.gen_frequency_hz).toFixed(2)} Hz` : 'No GEN input');
+    const genW = num(d.gen_power_w);
+    if (genV >= 1 && genW === 0) setFlow('ac', NaN, `${genV.toFixed(0)} V · power unmapped`, 'Connected');
+    else setFlow('ac', genW, genV >= 1 ? `${genV.toFixed(0)} V · ${num(d.gen_frequency_hz).toFixed(2)} Hz` : 'No GEN input');
 
     const gridW = num(d.grid_import_w) - num(d.grid_export_w); // + import, - export
     const gridUp = flowGrid ?? (num(d.grid_voltage_v) >= 200);
