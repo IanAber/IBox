@@ -33,6 +33,9 @@ type EG4Data struct {
 	EnergyOutputTodayKWh float64  `json:"energy_output_today_kwh"`
 	EPSL1PowerW          float64  `json:"eps_l1_power_w"`
 	EPSL2PowerW          float64  `json:"eps_l2_power_w"`
+	GenVoltageV          float64  `json:"gen_voltage_v"` // GEN port (AC-coupled solar)
+	GenFrequencyHz       float64  `json:"gen_frequency_hz"`
+	GenPowerW            float64  `json:"gen_power_w"`
 	GridVoltageV         float64  `json:"grid_voltage_v"`
 	GridFrequencyHz      float64  `json:"grid_frequency_hz"`
 	GridImportW          float64  `json:"grid_import_w"`
@@ -127,14 +130,24 @@ func applyBlock1(d *EG4Data, regs []uint16) error {
 	return nil
 }
 
-// applyBlock2 = "Parse Block 2 (EPS L1/L2 Power)". Read starts at 125,
-// so register 129 -> index 4, register 130 -> index 5.
+// Block 2 starts at input register 121 (GEN port) and runs to 134 (EPS).
+const (
+	block2Start = 121
+	block2Count = 14
+)
+
+// applyBlock2 = "Parse Block 2 (EPS L1/L2 Power)", extended down to the GEN
+// port registers. regs[i] is input register block2Start+i.
 func applyBlock2(d *EG4Data, regs []uint16) error {
-	if len(regs) < 6 {
-		return fmt.Errorf("block 2: expected 10 registers, got %d", len(regs))
+	if len(regs) < 10 {
+		return fmt.Errorf("block 2: expected %d registers, got %d", block2Count, len(regs))
 	}
-	d.EPSL1PowerW = float64(regs[4])
-	d.EPSL2PowerW = float64(regs[5])
+	r := func(reg int) float64 { return float64(regs[reg-block2Start]) }
+	d.GenVoltageV = round(r(121)*0.1, 1)
+	d.GenFrequencyHz = round(r(122)*0.01, 2)
+	d.GenPowerW = r(123)
+	d.EPSL1PowerW = r(129)
+	d.EPSL2PowerW = r(130)
 	return nil
 }
 
@@ -203,9 +216,9 @@ func (a *App) pollOnce(r *EG4Reader, failing *bool) {
 	// Block 2 is chained after block 1 as in the flow. If it fails we still
 	// publish block 1 (which carries SOC) rather than dropping the cycle.
 	time.Sleep(5 * time.Millisecond)
-	regs2, err2 := r.readRegs(125, 10)
+	regs2, err2 := r.readRegs(block2Start, block2Count)
 	if err2 != nil {
-		log.Printf("eg4: read registers 125-134 failed: %v", err2)
+		log.Printf("eg4: read registers 121-134 failed: %v", err2)
 	}
 
 	a.mu.Lock()

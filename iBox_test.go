@@ -58,13 +58,17 @@ func TestApplyBlock1(t *testing.T) {
 		t.Error("grid should be available at 242.5 V / 59.98 Hz")
 	}
 
-	regs2 := make([]uint16, 10)
-	regs2[4], regs2[5] = 800, 900
+	regs2 := make([]uint16, block2Count)
+	regs2[0], regs2[1], regs2[2] = 2398, 6002, 3100 // GEN 239.8 V, 60.02 Hz, 3100 W
+	regs2[8], regs2[9] = 800, 900                   // registers 129, 130
 	if err := applyBlock2(&d, regs2); err != nil {
 		t.Fatal(err)
 	}
 	check("l1", d.EPSL1PowerW, 800)
 	check("l2", d.EPSL2PowerW, 900)
+	check("gen_voltage", d.GenVoltageV, 239.8)
+	check("gen_freq", d.GenFrequencyHz, 60.02)
+	check("gen_power", d.GenPowerW, 3100)
 }
 
 func TestHysteresis(t *testing.T) {

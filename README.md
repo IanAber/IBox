@@ -4,7 +4,7 @@ One static binary that replaces all four Node-RED tabs:
 
 | Node-RED tab | Go file |
 |---|---|
-| EG4 6000XP Modbus (poll regs 0-39 + 125-134 every 5 s) | `eg4.go` |
+| EG4 6000XP Modbus (poll regs 0-39 + 121-134 every 5 s) | `eg4.go` |
 | SOC Load Control (8 relays, start/stop hysteresis, FC5 writes, 5 s retry) | `controller.go`, `relays.go` |
 | Circuit SOC Configuration (JSON file, validate, save/reload, defaults) | `config.go` |
 | Dashboard pages + EG4 Test Simulator | `web.go`, `web/index.html` (embedded in the binary) |
@@ -82,7 +82,7 @@ GET  /dashboard/events              Server-Sent Events: config, status, simstate
 3. **Simulated relay mode doesn't poll the relay module.** The flow always read the coils first, so
    with no module attached the read failed and evaluation never ran (and on success it overwrote the
    software model).
-4. **Block 2 failure doesn't drop block 1.** SOC still updates if the 125-134 read fails.
+4. **Block 2 failure doesn't drop block 1.** SOC still updates if the 121-134 read fails.
 5. **Test page mirrors live data continuously** while live read is on (the flow only refreshed it on
    toggle/page load).
 6. **Config file is written atomically** (temp file + rename) to survive power loss.
