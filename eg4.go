@@ -35,7 +35,7 @@ type EG4Data struct {
 	EPSL2PowerW          float64  `json:"eps_l2_power_w"`
 	GenVoltageV          float64  `json:"gen_voltage_v"` // GEN port (AC-coupled solar)
 	GenFrequencyHz       float64  `json:"gen_frequency_hz"`
-	GenPowerW            float64  `json:"gen_power_w"` // not read from the 6000XP yet; simulator only
+	GenPowerW            float64  `json:"gen_power_w"` // AC-coupled power, register 153
 	GridVoltageV         float64  `json:"grid_voltage_v"`
 	GridFrequencyHz      float64  `json:"grid_frequency_hz"`
 	GridImportW          float64  `json:"grid_import_w"`
@@ -130,25 +130,28 @@ func applyBlock1(d *EG4Data, regs []uint16) error {
 	return nil
 }
 
-// Block 2 starts at input register 121 (GEN port) and runs to 134 (EPS).
+// Block 2 runs from input register 121 (GEN port) through 134 (EPS) to 153
+// (AC-coupled power).
 const (
 	block2Start = 121
-	block2Count = 14
+	block2Count = 33
 )
 
 // applyBlock2 = "Parse Block 2 (EPS L1/L2 Power)", extended down to the GEN
 // port registers. regs[i] is input register block2Start+i.
 func applyBlock2(d *EG4Data, regs []uint16) error {
-	if len(regs) < 10 {
+	if len(regs) < block2Count {
 		return fmt.Errorf("block 2: expected %d registers, got %d", block2Count, len(regs))
 	}
 	r := func(reg int) float64 { return float64(regs[reg-block2Start]) }
 	d.GenVoltageV = round(r(121)*0.1, 1)
 	d.GenFrequencyHz = round(r(122)*0.01, 2)
-	// GEN power is not mapped yet: on a 6000XP register 123 reads ~19000
-	// with nothing on the GEN port and no loads, so it is not power at all.
-	// Map it from a register dump once something is connected to GEN.
-	d.GenPowerW = 0
+	// "AC Couple Power", input register 153, unsigned watts, as defined in
+	// github.com/adamksmith/ESPHome-Projects EG4-6000-XP/Parent-Inverter.yaml.
+	// Register 123 is NOT GEN power on a 6000XP: it reads ~19000 with nothing
+	// connected. GEN voltage/frequency (121/122) are not in that file and read
+	// 0 with nothing connected; treat them as unconfirmed.
+	d.GenPowerW = r(153)
 	d.EPSL1PowerW = r(129)
 	d.EPSL2PowerW = r(130)
 	return nil
@@ -225,7 +228,7 @@ func (a *App) pollOnce(r *EG4Reader, failing *bool) {
 	time.Sleep(5 * time.Millisecond)
 	regs2, err2 := r.readRegs(block2Start, block2Count)
 	if err2 != nil {
-		log.Printf("eg4: read registers 121-134 failed: %v", err2)
+		log.Printf("eg4: read registers 121-153 failed: %v", err2)
 	}
 
 	a.mu.Lock()

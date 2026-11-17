@@ -61,6 +61,7 @@ func TestApplyBlock1(t *testing.T) {
 
 	regs2 := make([]uint16, block2Count)
 	regs2[0], regs2[1], regs2[2] = 2398, 6002, 19380 // GEN 239.8 V, 60.02 Hz; 123 is not power
+	regs2[153-block2Start] = 3100                    // AC-coupled 3100 W
 	regs2[8], regs2[9] = 800, 900                    // registers 129, 130
 	if err := applyBlock2(&d, regs2); err != nil {
 		t.Fatal(err)
@@ -69,7 +70,10 @@ func TestApplyBlock1(t *testing.T) {
 	check("l2", d.EPSL2PowerW, 900)
 	check("gen_voltage", d.GenVoltageV, 239.8)
 	check("gen_freq", d.GenFrequencyHz, 60.02)
-	check("gen_power", d.GenPowerW, 0) // register 123 must not be used as GEN power
+	check("gen_power", d.GenPowerW, 3100) // from 153, not 123
+	if err := applyBlock2(&d, make([]uint16, 14)); err == nil {
+		t.Error("short block 2 should be rejected")
+	}
 }
 
 func TestHysteresis(t *testing.T) {
