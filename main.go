@@ -56,6 +56,7 @@ func main() {
 		log.Printf("eg4: polling disabled (-no-eg4); use the test simulator page")
 	} else {
 		eg4 := NewEG4Reader(*eg4Port, *eg4Baud, byte(*eg4Unit))
+		app.rawReq = make(chan chan rawDump)
 		go app.RunPoller(ctx, eg4, *poll)
 		log.Printf("eg4: polling %s @ %d baud every %s", *eg4Port, *eg4Baud, *poll)
 	}

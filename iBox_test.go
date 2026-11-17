@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -69,6 +70,12 @@ func TestApplyBlock1(t *testing.T) {
 	check("gen_voltage", d.GenVoltageV, 239.8)
 	check("gen_freq", d.GenFrequencyHz, 60.02)
 	check("gen_power", d.GenPowerW, 3100)
+
+	regs2[0], regs2[2] = 0, 18500 // nothing on GEN: ignore register 123
+	if err := applyBlock2(&d, regs2); err != nil {
+		t.Fatal(err)
+	}
+	check("gen_power_no_voltage", d.GenPowerW, 0)
 }
 
 func TestHysteresis(t *testing.T) {
@@ -350,5 +357,26 @@ func TestBatteryCurrentUnknown(t *testing.T) {
 	p := 1000.0
 	if _, ok := (EG4Data{BatteryPowerW: &p}).BatteryCurrentA(); ok {
 		t.Error("zero voltage should give no current")
+	}
+}
+
+func TestRawDumpText(t *testing.T) {
+	var d rawDump
+	d.values[12], d.ok[12] = 2405, true
+	d.values[26], d.ok[26] = 0xFFCE, true // -50 as int16
+	d.errs = []string{"registers 40-79: timeout"}
+	out := d.text()
+	for _, want := range []string{" 12      2405    2405  0965", " 26     65486     -50  FFCE", "ERROR registers 40-79: timeout"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("dump text missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "\n  0 ") {
+		t.Error("unread registers should be omitted")
+	}
+
+	app := NewApp(filepath.Join(t.TempDir(), "c.json"), NewRelayModule("/dev/null-does-not-exist", 9600, 1), NewHub(), true)
+	if _, err := app.requestRawDump(context.Background()); err == nil {
+		t.Error("dump should fail when EG4 polling is disabled")
 	}
 }

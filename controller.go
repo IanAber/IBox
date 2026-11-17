@@ -76,6 +76,7 @@ type App struct {
 	relays     *RelayModule
 	hub        *Hub
 	evalCh     chan struct{}
+	rawReq     chan chan rawDump // raw register dump requests; nil when not polling
 }
 
 func NewApp(configPath string, relays *RelayModule, hub *Hub, hwSimulated bool) *App {

@@ -145,7 +145,13 @@ func applyBlock2(d *EG4Data, regs []uint16) error {
 	r := func(reg int) float64 { return float64(regs[reg-block2Start]) }
 	d.GenVoltageV = round(r(121)*0.1, 1)
 	d.GenFrequencyHz = round(r(122)*0.01, 2)
-	d.GenPowerW = r(123)
+	// Register 123 reads ~18500 on a 6000XP with nothing on the GEN port, so
+	// it is not plain GEN power there. Until the map is confirmed, only report
+	// GEN power while the GEN input actually has voltage.
+	d.GenPowerW = 0
+	if d.GenVoltageV >= 1 {
+		d.GenPowerW = r(123)
+	}
 	d.EPSL1PowerW = r(129)
 	d.EPSL2PowerW = r(130)
 	return nil
@@ -190,10 +196,14 @@ func (a *App) RunPoller(ctx context.Context, r *EG4Reader, every time.Duration) 
 
 	for {
 		a.pollOnce(r, &failing)
+	wait:
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+		case reply := <-a.rawReq:
+			reply <- r.dump()
+			goto wait // a dump doesn't replace the regular poll
 		}
 	}
 }

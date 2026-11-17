@@ -96,6 +96,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("GET /dashboard/eg4-test", servePage)
 
 	mux.HandleFunc("GET /dashboard/events", a.handleEvents)
+	mux.HandleFunc("GET /api/eg4/raw", a.handleRawDump)
 
 	mux.HandleFunc("GET /api/state", func(w http.ResponseWriter, r *http.Request) {
 		a.mu.Lock()
