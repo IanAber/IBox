@@ -35,6 +35,13 @@ stop Apache/nginx/lighttpd if one is installed). To run it by hand outside syste
 Because it runs as root, a config saved from the dashboard is written as a root-owned file. Use
 `sudo` if you want to edit `/etc/ibox.config` by hand.
 
+### Serial ports after a restart
+
+After iBox stops (service restart, redeploy), the SC16IS7xx RS485 chip behind `/dev/ttySC0` /
+`/dev/ttySC1` can be left in a state where the ports open but never receive data until a reboot.
+`iBox.service` therefore runs `ibox-reset-serial` (installed by `Install.sh`) before every start; it
+unbinds and rebinds the `sc16is7xx` kernel driver, which resets the chip like a reboot does.
+
 ## Options
 
 ```

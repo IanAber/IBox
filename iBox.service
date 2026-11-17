@@ -5,6 +5,9 @@ After=network.target
 [Service]
 # Runs as root: full access to the serial ports and port 80.
 User=root
+# Reset the RS485 UART chip first: after a stop/restart it can otherwise
+# stay deaf until a reboot. "-" = start iBox even if the reset fails.
+ExecStartPre=-/usr/local/sbin/ibox-reset-serial
 ExecStart=/usr/local/bin/iBox \
     -eg4-port /dev/ttySC0 \
     -relay-port /dev/ttySC1 \

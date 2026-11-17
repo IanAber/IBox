@@ -7,6 +7,7 @@ fi
 
 systemctl stop iBox
 cp bin/ARM/iBox /usr/local/bin/iBox
+install -m 755 ibox-reset-serial.sh /usr/local/sbin/ibox-reset-serial
 
 # Install/refresh the unit so service-file changes (e.g. the config path) take effect.
 cp iBox.service /etc/systemd/system/iBox.service
